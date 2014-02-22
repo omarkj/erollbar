@@ -1,0 +1,11 @@
+{application, erollbar,
+ [
+  {description, "Rollbar client"},
+  {vsn, "0.0.1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {env, []}
+ ]}.
