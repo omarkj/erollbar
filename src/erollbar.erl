@@ -1,31 +1,37 @@
 -module(erollbar).
 -type access_token() :: binary().
+-type ms() :: non_neg_integer().
+-type info_fun() :: fun(([term()]) -> any()).
 -type opt() :: {modules, [module()]}|
                {applications, [atom()]}|
                {environment, iolist()}|
                {platform, iolist()}|
                {batch_max, pos_integer()}|
-               {host, iolist()}|
+               {time_max, ms()}|
                {endpoint, iolist()}|
-               {root, iolist()}|
-               {branch, iolist()}|
-               {code_version, iolist()}.
+               {info_fun, info_fun()|undefined}.
 -type opts() :: [opt()]|[].
--define(ENDPOINT, <<"https://api.rollbar.com/api/1/">>).
+-define(ENDPOINT, <<"https://api.rollbar.com/api/1">>).
 -export_type([access_token/0
               ,opt/0
-              ,opts/0]).
+              ,opts/0
+              ,info_fun/0
+              ,ms/0]).
 -export([start/1
          ,start/2]).
 
+-spec start(access_token()) -> ok.
 start(AccessToken) ->
     start(AccessToken, []).
 
+-spec start(access_token(), opts()) -> ok.
 start(AccessToken, Opts) ->
     Opts1 = set_defaults([{environment, <<"prod">>}
                           ,{platform, <<"beam">>}
-                          ,{host, hostname()}
-                          ,{endpoint, ?ENDPOINT}], Opts),
+                          ,{batch_max, 10}
+                          ,{endpoint, ?ENDPOINT}
+                          ,{info_fun, fun info/2}
+                         ], Opts),
     Opts2 = validate_opts(Opts1, []),
     ok = error_logger:add_report_handler(erollbar_handler, [AccessToken, Opts2]).
 
@@ -61,7 +67,7 @@ validate_opts([{applications, ApplicationList}|Rest], Retval) ->
                                    {application, ApplicationList}]);
 validate_opts([{Key, _}=Pair|Rest], Retval) ->
     case lists:member(Key, [environment, batch_max, host, endpoint, root, branch,
-                            code_version, platform]) of
+                            code_version, platform, info_fun]) of
         true ->
             validate_opts(Rest, Retval++[Pair]);
         false ->
@@ -74,6 +80,12 @@ get_application_modules([App|Rest], Retval) ->
     {ok, Modules} = application:get_key(App, modules),
     get_application_modules(Rest, Retval ++ Modules).
 
-hostname() ->
-    {ok, Hostname} = inet:gethostname(),
-    Hostname.
+info(undefined, Details) ->
+    {FmtStr, FmtList} = lists:foldl(
+                          fun({K, V}, {undefined, FmtLst}) ->
+                                  {"~p=~p", FmtLst ++ [K, V]};
+                             ({K, V}, {FmtStr, FmtLst}) ->
+                                  {FmtStr ++ " ~p=~p", FmtLst ++ [K, V]}
+                          end,
+                          {undefined, []}, Details),
+    error_logger:info_msg(FmtStr, FmtList).
