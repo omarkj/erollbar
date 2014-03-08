@@ -11,7 +11,8 @@
 -export([server/2]).
 
 all() ->
-    [default_settings].
+    [default_settings
+    ].
 
 init_per_suite(Config) ->
     ok = application:start(sasl),
@@ -50,7 +51,10 @@ default_settings(Config) ->
             [Frame1, _] = proplists:get_value(<<"frames">>, Trace),
             <<"-default_settings/1-fun-1-/0">> = proplists:get_value(<<"method">>, Frame1),
             Filename = proplists:get_value(<<"filename">>, Frame1),
-            {_, _} = binary:match(Filename, <<"erollbar_basic_SUITE.erl">>)
+            {_, _} = binary:match(Filename, <<"erollbar_basic_SUITE.erl">>),
+            ServerPart = proplists:get_value(<<"server">>, BodyParsed),
+            {ok, Hostname} = inet:gethostname(),
+            Hostname = binary_to_list(proplists:get_value(<<"host">>, ServerPart))
     after 1000 ->
             throw(test_timeout)
     end,

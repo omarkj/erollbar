@@ -12,8 +12,12 @@ Error handler that posts crash reports to Rollbar.com.
                {platform, binary()}|
                {batch_max, pos_integer()}|
                {time_max, ms()}|
-               {endpoint, iolist()}|
-               {info_fun, info_fun()|undefined}.
+               {endpoint, binary()}|
+               {info_fun, info_fun()}|
+               {host, binary()}|
+               {root, binary()}|
+               {branch, binary()}|
+               {sha, binary()}.
 -type opts() :: [opt()]|[].
 -spec start(access_token()) -> ok.
 -spec start(access_token(), opts()) -> ok.
@@ -24,10 +28,6 @@ Error handler that posts crash reports to Rollbar.com.
 ``` bash
 $ rebar ct skip_deps=true
 ```
-
-## Todo
-
-Add server block support, moar tests
 
 ## License
 

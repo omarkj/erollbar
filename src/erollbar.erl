@@ -4,12 +4,16 @@
 -type info_fun() :: fun(([term()]) -> any()).
 -type opt() :: {modules, [module()]}|
                {applications, [atom()]}|
-               {environment, iolist()}|
-               {platform, iolist()}|
+               {environment, binary()}|
+               {platform, binary()}|
                {batch_max, pos_integer()}|
                {time_max, ms()}|
-               {endpoint, iolist()}|
-               {info_fun, info_fun()|undefined}.
+               {endpoint, binary()}|
+               {info_fun, info_fun()}|
+               {host, binary()}|
+               {root, binary()}|
+               {branch, binary()}|
+               {sha, binary()}.
 -type opts() :: [opt()]|[].
 -define(ENDPOINT, <<"https://api.rollbar.com/api/1">>).
 -export_type([access_token/0
@@ -31,6 +35,7 @@ start(AccessToken, Opts) ->
                           ,{batch_max, 10}
                           ,{endpoint, ?ENDPOINT}
                           ,{info_fun, fun info/2}
+                          ,{host, hostname()}
                          ], Opts),
     Opts2 = validate_opts(Opts1, []),
     ok = error_logger:add_report_handler(erollbar_handler, [AccessToken, Opts2]).
@@ -67,7 +72,7 @@ validate_opts([{applications, ApplicationList}|Rest], Retval) ->
                                    {application, ApplicationList}]);
 validate_opts([{Key, _}=Pair|Rest], Retval) ->
     case lists:member(Key, [environment, batch_max, host, endpoint, root, branch,
-                            code_version, platform, info_fun]) of
+                            sha, platform, info_fun]) of
         true ->
             validate_opts(Rest, Retval++[Pair]);
         false ->
@@ -89,3 +94,7 @@ info(undefined, Details) ->
                           end,
                           {undefined, []}, Details),
     error_logger:info_msg(FmtStr, FmtList).
+
+hostname() ->
+    {ok, Hostname} = inet:gethostname(),
+    list_to_binary(Hostname).
