@@ -4,12 +4,15 @@
 -record(state, {access_token :: erollbar:access_token(),
                 modules = undefined :: undefined|[module()],
                 items = [] :: [term()]|[],
-                platform :: binary(),
-                environment :: binary(),
-                batch_max :: pos_integer(),
-                time_max :: erollbar:ms(),
-                time_ref :: reference(),
+                platform :: binary()|undefined,
+                environment :: binary()|undefined,
+                batch_max :: pos_integer()|undefined,
+                time_max :: erollbar:ms()|undefined,
+                time_ref :: reference()|undefined,
                 endpoint :: string(),
+                host :: binary()|undefined,
+                branch :: binary()|undefined,
+                sha :: binary()|undefined,
                 info_fun :: erollbar:info_fun()
                }).
 
@@ -34,7 +37,10 @@ init([AccessToken, Opts]) ->
                 time_max=TimeMax,
                 time_ref=TimeRef,
                 info_fun=proplists:get_value(info_fun, Opts),
-                endpoint=binary_to_list(proplists:get_value(endpoint, Opts))
+                endpoint=binary_to_list(proplists:get_value(endpoint, Opts)),
+                host=proplists:get_value(host, Opts),
+                branch=proplists:get_value(branch, Opts),
+                sha=proplists:get_value(sha, Opts)
                }}.
 
 handle_event({error_report, _, {_, crash_report, _}} = ErrorReport, State) ->
@@ -79,18 +85,16 @@ maybe_send_batch(Item, #state{batch_max=BatchMax,
 maybe_send_batch(Item, #state{items=Items}=State) ->
     State#state{items=Items++[Item]}.
 
-send_batch(#state{items=Items,
-                  access_token=AccessToken,
-                  environment=Environment,
-                  endpoint=Endpoint,
-                  info_fun=InfoFun}=State) ->
-    send_items(Items, InfoFun, Endpoint, AccessToken, Environment),
+send_batch(State) ->
+    send_items(State),
     State#state{items=[]}.
 
-send_items([], _, _, _, _) ->
-    ok;
-send_items([Item|Items], InfoFun, Endpoint, AccessToken, Environment) ->
-    Message = create_message(AccessToken, Environment, Item),
+send_items(#state{items=[]}=State) ->
+    State;
+send_items(#state{items=[Item|Items], info_fun=InfoFun, endpoint=Endpoint,
+                  access_token=AccessToken, environment=Environment,
+                  host=Host, branch=Branch, sha=Sha}=State) ->
+    Message = create_message(AccessToken, Environment, Item, Host, Branch, Sha),
     case httpc:request(post, {Endpoint ++ "/item/", [], "application/json", Message}, [], []) of
         {ok, {{_, 200, _}, _, _}} ->
             ok;
@@ -104,12 +108,30 @@ send_items([Item|Items], InfoFun, Endpoint, AccessToken, Environment) ->
                            {at, send_items},
                            {reason, Reason}])
     end,
-    send_items(Items, InfoFun, Endpoint, AccessToken, Environment).
+    send_items(State#state{items=Items}).
 
-create_message(AccessToken, Environment, Item) ->
-    jsx:encode([{<<"access_token">>, AccessToken},
+create_message(AccessToken, Environment, Item, Host, Branch, Sha) ->
+    Message = [{<<"access_token">>, AccessToken},
                 {<<"data">>, [{<<"environment">>, Environment},
-                              {<<"body">>, Item}]}]).
+                              {<<"body">>, Item}]}],
+    Message1 =
+        case create_server_block(Host, Branch, Sha) of
+            [] ->
+                Message;
+             ServerBlock ->
+                Message ++ [{<<"server">>, ServerBlock}]
+        end,
+    jsx:encode(Message1).
+
+create_server_block(Host, Branch, Sha) ->
+    Block = add_to_block(<<"host">>, Host, []),
+    Block1 = add_to_block(<<"branch">>, Branch, Block),
+    add_to_block(<<"sha">>, Sha, Block1).
+
+add_to_block(_, undefined, Block) ->
+    Block;
+add_to_block(Key, Val, Block) ->
+    Block++[{Key, Val}].
 
 maybe_create_item({error_report, _, {_, crash_report, [Report, Neighbors]}},
                   #state{modules=undefined}=State) ->
