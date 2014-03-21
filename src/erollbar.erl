@@ -72,7 +72,7 @@ validate_opts([{applications, ApplicationList}|Rest], Retval) ->
                                    {application, ApplicationList}]);
 validate_opts([{Key, _}=Pair|Rest], Retval) ->
     case lists:member(Key, [environment, batch_max, host, endpoint, root, branch,
-                            sha, platform, info_fun]) of
+                            sha, platform, info_fun, time_max]) of
         true ->
             validate_opts(Rest, Retval++[Pair]);
         false ->
