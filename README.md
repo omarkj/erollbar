@@ -21,6 +21,7 @@ Error handler that posts crash reports to Rollbar.com.
 -type opts() :: [opt()]|[].
 -spec start(access_token()) -> ok.
 -spec start(access_token(), opts()) -> ok.
+-spec stop() -> ok.
 ```
 
 ## Running the tests
