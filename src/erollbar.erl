@@ -16,13 +16,15 @@
                {sha, binary()}.
 -type opts() :: [opt()]|[].
 -define(ENDPOINT, <<"https://api.rollbar.com/api/1">>).
+-define(HANDLER_NAME, erollbar_handler).
 -export_type([access_token/0
               ,opt/0
               ,opts/0
               ,info_fun/0
               ,ms/0]).
 -export([start/1
-         ,start/2]).
+         ,start/2,
+         stop/0]).
 
 -spec start(access_token()) -> ok.
 start(AccessToken) ->
@@ -34,11 +36,15 @@ start(AccessToken, Opts) ->
                           ,{platform, <<"beam">>}
                           ,{batch_max, 10}
                           ,{endpoint, ?ENDPOINT}
-                          ,{info_fun, fun info/2}
+                          ,{info_fun, fun info/1}
                           ,{host, hostname()}
                          ], Opts),
     Opts2 = validate_opts(Opts1, []),
-    ok = error_logger:add_report_handler(erollbar_handler, [AccessToken, Opts2]).
+    ok = error_logger:add_report_handler(?HANDLER_NAME, [AccessToken, Opts2]).
+
+-spec stop() -> ok | term() | {'EXIT', term()}.
+stop() ->
+    error_logger:delete_report_handler(?HANDLER_NAME).
 
 %% Internal
 set_defaults([], Opts) ->
@@ -85,7 +91,7 @@ get_application_modules([App|Rest], Retval) ->
     {ok, Modules} = application:get_key(App, modules),
     get_application_modules(Rest, Retval ++ Modules).
 
-info(undefined, Details) ->
+info(Details) ->
     {FmtStr, FmtList} = lists:foldl(
                           fun({K, V}, {undefined, FmtLst}) ->
                                   {"~p=~p", FmtLst ++ [K, V]};
@@ -93,6 +99,7 @@ info(undefined, Details) ->
                                   {FmtStr ++ " ~p=~p", FmtLst ++ [K, V]}
                           end,
                           {undefined, []}, Details),
+    ct:pal("called info"),
     error_logger:info_msg(FmtStr, FmtList).
 
 hostname() ->
