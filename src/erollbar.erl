@@ -34,7 +34,7 @@ start(AccessToken, Opts) ->
                           ,{platform, <<"beam">>}
                           ,{batch_max, 10}
                           ,{endpoint, ?ENDPOINT}
-                          ,{info_fun, fun info/2}
+                          ,{info_fun, fun info/1}
                           ,{host, hostname()}
                          ], Opts),
     Opts2 = validate_opts(Opts1, []),
@@ -85,7 +85,7 @@ get_application_modules([App|Rest], Retval) ->
     {ok, Modules} = application:get_key(App, modules),
     get_application_modules(Rest, Retval ++ Modules).
 
-info(undefined, Details) ->
+info(Details) ->
     {FmtStr, FmtList} = lists:foldl(
                           fun({K, V}, {undefined, FmtLst}) ->
                                   {"~p=~p", FmtLst ++ [K, V]};
