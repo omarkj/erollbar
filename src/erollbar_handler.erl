@@ -151,14 +151,14 @@ create_body(Report, _Neighbors, #state{platform=Platform}) ->
     Item = [{<<"trace">>, create_trace(ErrorInfo)},
             {<<"level">>, <<"error">>},
             {<<"timestamp">>, unix_timestamp()},
-            {<<"platform">>, Platform},
+            {<<"platform">>, to_binary(Platform)},
             {<<"language">>, <<"erlang">>}],
     {ok, Item}.
 
 create_trace({_Error, Reason, Frames}) ->
     [{<<"frames">>, create_frames(Frames, [])},
      {<<"exception">>,
-      [{<<"class">>, Reason}]}].
+      [{<<"class">>, to_binary(Reason)}]}].
 
 create_frames([], Retval) ->
     Retval;
@@ -169,10 +169,10 @@ create_frames([{Module, Fun, Arity, Info}|Rest], Retval) ->
                    CompileInfo ->
                        proplists:get_value(source, CompileInfo)
                end,
-    Frame = [{<<"filename">>, list_to_binary(Filename)},
-             {<<"lineno">>, proplists:get_value(line, Info)},
-             {<<"method">>, iolist_to_binary([atom_to_list(Fun), <<"/">>, integer_to_list(Arity)])}],
-    create_frames(Rest, Retval ++ [Frame]).
+    Frame = [{<<"filename">>, to_binary(Filename)},
+             {<<"method">>, iolist_to_binary([to_binary(Fun), <<"/">>, to_binary(Arity)])}],
+    Frame1 = add_lineno(Frame, proplists:get_value(line, Info)),
+    create_frames(Rest, Retval ++ [Frame1]).
 
 unix_timestamp() ->
     {Mega, Secs, _} = now(),
@@ -180,3 +180,19 @@ unix_timestamp() ->
 
 info(InfoFun, Details) ->
     InfoFun(Details).
+
+add_lineno(Frame, LineNo) when is_integer(LineNo) ->
+    Frame ++ [{<<"lineno">>, LineNo}];
+add_lineno(Frame, _) ->
+    Frame.
+
+to_binary(B) when is_binary(B) ->
+    B;
+to_binary(L) when is_list(L) ->
+    list_to_binary(L);
+to_binary(A) when is_atom(A) ->
+    to_binary(atom_to_list(A));
+to_binary(I) when is_integer(I) ->
+    to_binary(integer_to_list(I));
+to_binary(F) when is_float(F) ->
+    to_binary(float_to_list(F)).
