@@ -15,6 +15,7 @@
                 sha :: binary()|undefined,
                 info_fun :: erollbar:info_fun()
                }).
+-define(HTTP_TIMEOUT, 5000).
 
 -export([init/1
          ,handle_event/2
@@ -58,7 +59,7 @@ handle_call(_Request, State) ->
     {ok, undefined, State}.
 
 handle_info(time_max_reached, #state{time_max=TimeMax}=State) ->
-    State1 = send_batch(State),
+    State1 = send_items(State),
     TimeRef = erlang:send_after(TimeMax, self(), time_max_reached),
     {ok, State1#state{time_ref=TimeRef}};
 handle_info(_Info, State) ->
@@ -70,9 +71,9 @@ terminate(Reason, #state{time_ref=TimeRef,
     if is_reference(TimeRef) -> erlang:cancel_timer(TimeRef);
        true -> ok
     end,
-    info(InfoFun, [{at, terminate}
-                   ,{reason, Reason}
-                   ,{dropped, length(Items)}]),
+    catch info(InfoFun, [{at, terminate}
+                         ,{reason, Reason}
+                         ,{dropped, length(Items)}]),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -81,13 +82,9 @@ code_change(_OldVsn, State, _Extra) ->
 % Internal
 maybe_send_batch(Item, #state{batch_max=BatchMax,
                               items=Items}=State) when length(Items) + 1 >= BatchMax ->
-    send_batch(State#state{items=Items++[Item]});
+    send_items(State#state{items=Items++[Item]});
 maybe_send_batch(Item, #state{items=Items}=State) ->
     State#state{items=Items++[Item]}.
-
-send_batch(State) ->
-    send_items(State),
-    State#state{items=[]}.
 
 send_items(#state{items=[]}=State) ->
     State;
@@ -95,7 +92,8 @@ send_items(#state{items=[Item|Items], info_fun=InfoFun, endpoint=Endpoint,
                   access_token=AccessToken, environment=Environment,
                   host=Host, branch=Branch, sha=Sha}=State) ->
     Message = create_message(AccessToken, Environment, Item, Host, Branch, Sha),
-    case httpc:request(post, {Endpoint ++ "/item/", [], "application/json", Message}, [], []) of
+    case httpc:request(post, {Endpoint ++ "/item/", [], "application/json", Message},
+                       [{timeout, ?HTTP_TIMEOUT}], []) of
         {ok, {{_, 200, _}, _, _}} ->
             ok;
         {ok, {{_, Code, _}, _Headers, Body}} ->
