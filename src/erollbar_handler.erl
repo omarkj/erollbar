@@ -38,7 +38,7 @@ init([AccessToken, Opts]) ->
                 time_max=TimeMax,
                 time_ref=TimeRef,
                 info_fun=proplists:get_value(info_fun, Opts),
-                endpoint=binary_to_list(proplists:get_value(endpoint, Opts)),
+                endpoint=proplists:get_value(endpoint, Opts),
                 host=proplists:get_value(host, Opts),
                 branch=proplists:get_value(branch, Opts),
                 sha=proplists:get_value(sha, Opts)
@@ -92,11 +92,9 @@ send_items(#state{items=[Item|Items], info_fun=InfoFun, endpoint=Endpoint,
                   access_token=AccessToken, environment=Environment,
                   host=Host, branch=Branch, sha=Sha}=State) ->
     Message = create_message(AccessToken, Environment, Item, Host, Branch, Sha),
-    case httpc:request(post, {Endpoint ++ "/item/", [], "application/json", Message},
-                       [{timeout, ?HTTP_TIMEOUT}], []) of
-        {ok, {{_, 200, _}, _, _}} ->
-            ok;
-        {ok, {{_, Code, _}, _Headers, Body}} ->
+    case erollbar_utils:request(Endpoint, Message, ?HTTP_TIMEOUT) of
+        ok -> ok;
+        {error, Code, Body} ->
             info(InfoFun, [{mod, erollbar_handler},
                            {at, send_items},
                            {code, Code},
@@ -149,18 +147,20 @@ create_body(Report, _Neighbors, #state{platform=Platform}) ->
     Item = [{<<"trace">>, create_trace(ErrorInfo)},
             {<<"level">>, <<"error">>},
             {<<"timestamp">>, unix_timestamp()},
-            {<<"platform">>, to_binary(Platform)},
+            {<<"platform">>, erollbar_utils:to_binary(Platform)},
             {<<"language">>, <<"erlang">>}],
     {ok, Item}.
 
 create_trace({_Error, Reason, Frames}) ->
     [{<<"frames">>, create_frames(Frames, [])},
-     {<<"exception">>,
-      [{<<"class">>, to_binary(Reason)}]}].
+     {<<"exception">>, [{<<"class">>, erollbar_utils:to_binary(ExceptionExit)}]}].
 
 create_frames([], Retval) ->
     Retval;
 create_frames([{Module, Fun, Arity, Info}|Rest], Retval) ->
+    Frame = [{<<"filename">>, erollbar_utils:to_binary(Filename)},
+             {<<"method">>, iolist_to_binary([erollbar_utils:to_binary(Fun), <<"/">>,
+                                              erollbar_utils:to_binary(Arity)])}],
     Filename = case Module:module_info(compile) of
                    undefined ->
                        Module;
@@ -174,7 +174,7 @@ create_frames([{Module, Fun, Arity, Info}|Rest], Retval) ->
 
 unix_timestamp() ->
     {Mega, Secs, _} = now(),
-    list_to_binary(integer_to_list(Mega*1000000 + Secs)).
+    erollbar_utils:to_binary(Mega*1000000 + Secs).
 
 info(InfoFun, Details) ->
     InfoFun(Details).
@@ -183,14 +183,3 @@ add_lineno(Frame, LineNo) when is_integer(LineNo) ->
     Frame ++ [{<<"lineno">>, LineNo}];
 add_lineno(Frame, _) ->
     Frame.
-
-to_binary(B) when is_binary(B) ->
-    B;
-to_binary(L) when is_list(L) ->
-    list_to_binary(L);
-to_binary(A) when is_atom(A) ->
-    to_binary(atom_to_list(A));
-to_binary(I) when is_integer(I) ->
-    to_binary(integer_to_list(I));
-to_binary(F) when is_float(F) ->
-    to_binary(float_to_list(F)).

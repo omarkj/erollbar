@@ -1,12 +1,12 @@
 {application, erollbar,
  [
   {description, "Rollbar client"},
-  {vsn, "0.0.2"},
+  {vsn, "0.0.3"},
   {registered, []},
   {applications, [
                   kernel,
                   stdlib,
                   sasl,
-                  inets
+                  hackney
                  ]}
  ]}.
