@@ -17,28 +17,32 @@ parse({_, _, {_, _, [Report, _]}}, #details{platform=Platform}) ->
     {ok, Item}.
 
 % Internal
-create_trace({_Error, Reason, Frames}) ->
+create_trace({_Error, ExceptionExit, Frames}) when is_atom(ExceptionExit) ->
     [{<<"frames">>, create_frames(Frames, [])},
-     {<<"exception">>, [{<<"class">>, erollbar_utils:to_binary(Reason)}]}].
+     {<<"exception">>, [{<<"class">>, erollbar_utils:to_binary(ExceptionExit)}]}];
+create_trace({_Error, {ExceptionExit, Frames}, _}) ->
+    [{<<"frames">>, create_frames(Frames, [])},
+     {<<"exception">>, [{<<"class">>, erollbar_utils:to_binary(ExceptionExit)}]}].
 
 create_frames([], Retval) ->
     Retval;
-create_frames([{Module, Fun, Arity, Info}|Rest], Retval) ->
-    Filename = case Module:module_info(compile) of
-                   undefined ->
-                       Module;
-                   CompileInfo ->
-                       proplists:get_value(source, CompileInfo)
-               end,
-    Frame = [{<<"filename">>, erollbar_utils:to_binary(Filename)},
-             {<<"method">>, iolist_to_binary([erollbar_utils:to_binary(Fun),
-                                              <<"/">>, erollbar_utils:to_binary(Arity)])}],
-    Frame1 = add_lineno(Frame, proplists:get_value(line, Info)),
-    create_frames(Rest, Retval ++ [Frame1]).
+create_frames([{Module, Fun, ArgsOrArity, Info}|Rest], Retval) ->
+    Filename = iolist_to_binary([erollbar_utils:to_binary(Module), ".erl"]),
+    Frame = [{<<"filename">>, erollbar_utils:to_binary(Filename)}],
+    Frame1 = add_method_args(Fun, ArgsOrArity, Frame),
+    Frame2 = add_lineno(proplists:get_value(line, Info), Frame1),
+    create_frames(Rest, Retval ++ [Frame2]).
 
-add_lineno(Frame, LineNo) when is_integer(LineNo) ->
+add_method_args(Fun, Arity, Frame) when is_integer(Arity) ->
+    Frame ++ [{<<"method">>, iolist_to_binary([erollbar_utils:to_binary(Fun),
+                                               <<"/">>, erollbar_utils:to_binary(Arity)])}];
+add_method_args(Fun, Args, Frame) when is_list(Args) ->
+    Frame ++ [{<<"method">>, erollbar_utils:to_binary(Fun)},
+              {<<"args">>, [erollbar_utils:to_binary(Arg) || Arg <- Args]}].
+
+add_lineno(LineNo, Frame) when is_integer(LineNo) ->
     Frame ++ [{<<"lineno">>, LineNo}];
-add_lineno(Frame, _) ->
+add_lineno(_, Frame) ->
     Frame.
 
 unix_timestamp() ->

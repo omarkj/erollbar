@@ -9,13 +9,15 @@
 
 -export([default_settings/1
          ,max_time/1
+         ,bigger_crash/1
         ]).
 
 -export([server/2]).
 
 all() ->
-    [default_settings
-     ,max_time
+    [default_settings,
+     max_time
+     ,bigger_crash
     ].
 
 init_per_suite(Config) ->
@@ -79,6 +81,38 @@ max_time(Config) ->
     proc_lib:spawn(fun() -> 1/0 end),
     timer:sleep(10),
     [_] = get_msg(1),
+    Config.
+
+bigger_crash(Config) ->
+    Self = self(),
+    Port = create([{ondata, fun(ASocket, Data, _) ->
+                                    Self ! Data,
+                                    gen_tcp:send(ASocket, "HTTP/1.1 200 OK\r\n\r\n"),
+                                    die
+                            end}]),
+    AccessCode = <<"test_code">>,
+    erollbar:start(AccessCode, [{endpoint,
+                                 list_to_binary("http://localhost:"++integer_to_list(Port))}
+                               ,{batch_max, 0}]),
+    {ok, Pid} = erollbar_crasher:start(),
+    catch erollbar_crasher:crash_on_ets(Pid),
+    timer:sleep(10),
+    [Data] = get_msg(1),
+    Body = parse_http(Data),
+    BodyParsed = jsx:decode(Body),
+    AccessCode = proplists:get_value(<<"access_token">>, BodyParsed),
+    DataPart = proplists:get_value(<<"data">>, BodyParsed),
+    <<"prod">> = proplists:get_value(<<"environment">>, DataPart),
+    BodyPart = proplists:get_value(<<"body">>, DataPart),
+    <<"error">> = proplists:get_value(<<"level">>, BodyPart),
+    <<"beam">> = proplists:get_value(<<"platform">>, BodyPart),
+    <<"erlang">> = proplists:get_value(<<"language">>, BodyPart),
+    Trace = proplists:get_value(<<"trace">>, BodyPart),
+    [Frame1, _, _, _] = proplists:get_value(<<"frames">>, Trace),
+    <<"insert">> = proplists:get_value(<<"method">>, Frame1),
+    Filename = proplists:get_value(<<"filename">>, Frame1),
+    {_, _} = binary:match(Filename, <<"ets.erl">>),
+    [<<"heh">>, <<"bye">>] = proplists:get_value(<<"args">>, Frame1),
     Config.
 
 % Internal

@@ -8,13 +8,8 @@
                 time_max :: erollbar:ms()|undefined,
                 time_ref :: reference()|undefined,
                 endpoint :: binary(),
-                details :: #details{},
-                platform :: binary()|undefined,
-                environment :: binary()|undefined,
-                host :: binary()|undefined,
-                branch :: binary()|undefined,
-                sha :: binary()|undefined,
-                info_fun :: erollbar:info_fun()
+                info_fun :: erollbar:info_fun(),
+                details :: #details{}
                }).
 
 -define(HTTP_TIMEOUT, 5000).
