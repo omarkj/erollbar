@@ -20,8 +20,7 @@ all() ->
 
 init_per_suite(Config) ->
     ok = application:start(sasl),
-    ok = application:start(inets),
-    {ok, _} = application:ensure_all_started(ssl),
+    {ok, _} = application:ensure_all_started(hackney),
     Config.
 
 end_per_suite(Config) ->

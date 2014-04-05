@@ -153,22 +153,20 @@ create_body(Report, _Neighbors, #state{platform=Platform}) ->
 
 create_trace({_Error, Reason, Frames}) ->
     [{<<"frames">>, create_frames(Frames, [])},
-     {<<"exception">>, [{<<"class">>, erollbar_utils:to_binary(ExceptionExit)}]}].
+     {<<"exception">>, [{<<"class">>, erollbar_utils:to_binary(Reason)}]}].
 
 create_frames([], Retval) ->
     Retval;
 create_frames([{Module, Fun, Arity, Info}|Rest], Retval) ->
-    Frame = [{<<"filename">>, erollbar_utils:to_binary(Filename)},
-             {<<"method">>, iolist_to_binary([erollbar_utils:to_binary(Fun), <<"/">>,
-                                              erollbar_utils:to_binary(Arity)])}],
     Filename = case Module:module_info(compile) of
                    undefined ->
                        Module;
                    CompileInfo ->
                        proplists:get_value(source, CompileInfo)
                end,
-    Frame = [{<<"filename">>, to_binary(Filename)},
-             {<<"method">>, iolist_to_binary([to_binary(Fun), <<"/">>, to_binary(Arity)])}],
+    Frame = [{<<"filename">>, erollbar_utils:to_binary(Filename)},
+             {<<"method">>, iolist_to_binary([erollbar_utils:to_binary(Fun),
+                                              <<"/">>, erollbar_utils:to_binary(Arity)])}],
     Frame1 = add_lineno(Frame, proplists:get_value(line, Info)),
     create_frames(Rest, Retval ++ [Frame1]).
 
