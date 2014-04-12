@@ -41,8 +41,9 @@ init([AccessToken, Opts]) ->
                                  sha=proplists:get_value(sha, Opts)}
                }}.
 
-handle_event({error_report, _, {_, crash_report, _}} = ErrorReport, State) ->
-    case maybe_create_item(ErrorReport, State) of
+handle_event({error_report, _, {_, crash_report, _}} = ErrorReport,
+             #state{modules=Modules, details=Details}=State) ->
+    case maybe_create_item(ErrorReport, Modules, Details) of
         undefined ->
             {ok, State};
         {ok, Item} ->
@@ -128,11 +129,10 @@ add_to_block(_, undefined, Block) ->
 add_to_block(Key, Val, Block) ->
     Block++[{Key, Val}].
 
-maybe_create_item(Report, #state{modules=undefined,
-                                 details=Details}=State) ->
+maybe_create_item(Report, undefined, Details) ->
     erollbar_parser:parse(Report, Details);
 maybe_create_item({error_report, _, {_, crash_report, [Report, Neighbors]}} = Report,
-                  #state{modules=Modules, details=Details}=State) ->
+                  Modules, Details) ->
     Module = erollbar_parser:initial_call(Report),
     case lists:member(Module, Modules) of
         true ->
