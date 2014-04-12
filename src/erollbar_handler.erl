@@ -1,20 +1,17 @@
 -module(erollbar_handler).
 -behaviour(gen_event).
-
+-include("erollbar.hrl").
 -record(state, {access_token :: erollbar:access_token(),
                 modules = undefined :: undefined|[module()],
                 items = [] :: [term()]|[],
-                platform :: binary()|undefined,
-                environment :: binary()|undefined,
                 batch_max :: pos_integer()|undefined,
                 time_max :: erollbar:ms()|undefined,
                 time_ref :: reference()|undefined,
-                endpoint :: string(),
-                host :: binary()|undefined,
-                branch :: binary()|undefined,
-                sha :: binary()|undefined,
-                info_fun :: erollbar:info_fun()
+                endpoint :: binary(),
+                info_fun :: erollbar:info_fun(),
+                details :: #details{}
                }).
+
 -define(HTTP_TIMEOUT, 5000).
 
 -export([init/1
@@ -31,21 +28,22 @@ init([AccessToken, Opts]) ->
                  true -> undefined
               end,
     {ok, #state{access_token=AccessToken,
-                platform=proplists:get_value(platform, Opts),
                 modules=proplists:get_value(modules, Opts),
                 batch_max=proplists:get_value(batch_max, Opts),
-                environment=proplists:get_value(environment, Opts),
                 time_max=TimeMax,
                 time_ref=TimeRef,
                 info_fun=proplists:get_value(info_fun, Opts),
                 endpoint=proplists:get_value(endpoint, Opts),
-                host=proplists:get_value(host, Opts),
-                branch=proplists:get_value(branch, Opts),
-                sha=proplists:get_value(sha, Opts)
+                details=#details{platform=proplists:get_value(platform, Opts),
+                                 environment=proplists:get_value(environment, Opts),
+                                 host=proplists:get_value(host, Opts),
+                                 branch=proplists:get_value(branch, Opts),
+                                 sha=proplists:get_value(sha, Opts)}
                }}.
 
-handle_event({error_report, _, {_, crash_report, _}} = ErrorReport, State) ->
-    case maybe_create_item(ErrorReport, State) of
+handle_event({error_report, _, {_, crash_report, _}} = ErrorReport,
+             #state{modules=Modules, details=Details}=State) ->
+    case maybe_create_item(ErrorReport, Modules, Details) of
         undefined ->
             {ok, State};
         {ok, Item} ->
@@ -89,9 +87,8 @@ maybe_send_batch(Item, #state{items=Items}=State) ->
 send_items(#state{items=[]}=State) ->
     State;
 send_items(#state{items=[Item|Items], info_fun=InfoFun, endpoint=Endpoint,
-                  access_token=AccessToken, environment=Environment,
-                  host=Host, branch=Branch, sha=Sha}=State) ->
-    Message = create_message(AccessToken, Environment, Item, Host, Branch, Sha),
+                  access_token=AccessToken, details=Details}=State) ->
+    Message = create_message(AccessToken, Item, Details),
     case erollbar_utils:request(Endpoint, Message, ?HTTP_TIMEOUT) of
         ok -> ok;
         {error, Code, Body} ->
@@ -106,7 +103,10 @@ send_items(#state{items=[Item|Items], info_fun=InfoFun, endpoint=Endpoint,
     end,
     send_items(State#state{items=Items}).
 
-create_message(AccessToken, Environment, Item, Host, Branch, Sha) ->
+create_message(AccessToken, Item, #details{environment=Environment,
+                                           host=Host,
+                                           branch=Branch,
+                                           sha=Sha}) ->
     Message = [{<<"access_token">>, AccessToken},
                 {<<"data">>, [{<<"environment">>, Environment},
                               {<<"body">>, Item}]}],
@@ -129,55 +129,17 @@ add_to_block(_, undefined, Block) ->
 add_to_block(Key, Val, Block) ->
     Block++[{Key, Val}].
 
-maybe_create_item({error_report, _, {_, crash_report, [Report, Neighbors]}},
-                  #state{modules=undefined}=State) ->
-    create_body(Report, Neighbors, State);
-maybe_create_item({error_report, _, {_, crash_report, [Report, Neighbors]}},
-                  #state{modules=Modules}=State) ->
-    {Module, _, _} = proplists:get_value(initial_call, Report),
+maybe_create_item(Report, undefined, Details) ->
+    erollbar_parser:parse(Report, Details);
+maybe_create_item({error_report, _, {_, crash_report, [Report, Neighbors]}} = Report,
+                  Modules, Details) ->
+    Module = erollbar_parser:initial_call(Report),
     case lists:member(Module, Modules) of
         true ->
-            create_body(Report, Neighbors, State);
+            erollbar_parser:parse(Report, Details);
         false ->
             undefined
     end.
 
-create_body(Report, _Neighbors, #state{platform=Platform}) ->
-    ErrorInfo = proplists:get_value(error_info, Report, []),
-    Item = [{<<"trace">>, create_trace(ErrorInfo)},
-            {<<"level">>, <<"error">>},
-            {<<"timestamp">>, unix_timestamp()},
-            {<<"platform">>, erollbar_utils:to_binary(Platform)},
-            {<<"language">>, <<"erlang">>}],
-    {ok, Item}.
-
-create_trace({_Error, Reason, Frames}) ->
-    [{<<"frames">>, create_frames(Frames, [])},
-     {<<"exception">>, [{<<"class">>, erollbar_utils:to_binary(Reason)}]}].
-
-create_frames([], Retval) ->
-    Retval;
-create_frames([{Module, Fun, Arity, Info}|Rest], Retval) ->
-    Filename = case Module:module_info(compile) of
-                   undefined ->
-                       Module;
-                   CompileInfo ->
-                       proplists:get_value(source, CompileInfo)
-               end,
-    Frame = [{<<"filename">>, erollbar_utils:to_binary(Filename)},
-             {<<"method">>, iolist_to_binary([erollbar_utils:to_binary(Fun),
-                                              <<"/">>, erollbar_utils:to_binary(Arity)])}],
-    Frame1 = add_lineno(Frame, proplists:get_value(line, Info)),
-    create_frames(Rest, Retval ++ [Frame1]).
-
-unix_timestamp() ->
-    {Mega, Secs, _} = now(),
-    erollbar_utils:to_binary(Mega*1000000 + Secs).
-
 info(InfoFun, Details) ->
     InfoFun(Details).
-
-add_lineno(Frame, LineNo) when is_integer(LineNo) ->
-    Frame ++ [{<<"lineno">>, LineNo}];
-add_lineno(Frame, _) ->
-    Frame.
