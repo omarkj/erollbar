@@ -3,21 +3,22 @@
 
 -export([all/0]).
 -export([init_per_suite/1
-	 ,end_per_suite/1
-         ,init_per_testcase/2
-         ,end_per_testcase/2]).
+        ,end_per_suite/1
+        ,init_per_testcase/2
+        ,end_per_testcase/2
+        ]).
 
 -export([default_settings/1
-         ,max_time/1
-         ,bigger_crash/1
+        ,max_time/1
+        ,bigger_crash/1
         ]).
 
 -export([server/2]).
 
 all() ->
-    [default_settings,
-     max_time
-     ,bigger_crash
+    [default_settings
+    ,max_time
+    ,bigger_crash
     ].
 
 init_per_suite(Config) ->
@@ -32,7 +33,9 @@ init_per_testcase(_, Config) ->
     Config.
 
 end_per_testcase(_, Config) ->
+    ct:pal("stopping"),
     ok = erollbar:stop(),
+    ct:pal("stopped"),
     Config.
     
 %% Tests
@@ -52,7 +55,7 @@ default_settings(Config) ->
     Body = parse_http(Data),
     BodyParsed = jsx:decode(Body),
     AccessCode = proplists:get_value(<<"access_token">>, BodyParsed),
-    DataPart = proplists:get_value(<<"data">>, BodyParsed),
+    [DataPart] = proplists:get_value(<<"data">>, BodyParsed),
     <<"prod">> = proplists:get_value(<<"environment">>, DataPart),
     BodyPart = proplists:get_value(<<"body">>, DataPart),
     <<"error">> = proplists:get_value(<<"level">>, BodyPart),
@@ -63,7 +66,7 @@ default_settings(Config) ->
     <<"-default_settings/1-fun-1-/0">> = proplists:get_value(<<"method">>, Frame1),
     Filename = proplists:get_value(<<"filename">>, Frame1),
     {_, _} = binary:match(Filename, <<"erollbar_basic_SUITE.erl">>),
-    ServerPart = proplists:get_value(<<"server">>, BodyParsed),
+    ServerPart = proplists:get_value(<<"server">>, DataPart),
     {ok, Hostname} = inet:gethostname(),
     Hostname = binary_to_list(proplists:get_value(<<"host">>, ServerPart)),
     Config.
@@ -101,7 +104,7 @@ bigger_crash(Config) ->
     Body = parse_http(Data),
     BodyParsed = jsx:decode(Body),
     AccessCode = proplists:get_value(<<"access_token">>, BodyParsed),
-    DataPart = proplists:get_value(<<"data">>, BodyParsed),
+    [DataPart] = proplists:get_value(<<"data">>, BodyParsed),
     <<"prod">> = proplists:get_value(<<"environment">>, DataPart),
     BodyPart = proplists:get_value(<<"body">>, DataPart),
     <<"error">> = proplists:get_value(<<"level">>, BodyPart),
@@ -160,7 +163,6 @@ server(LSocket, Opts) ->
     loop(ASocket, Opts, State),
     case proplists:get_value(restart, Opts, false) of
         true ->
-            ct:pal("RESTARTING"),
             server(LSocket, Opts);
         false ->
             ok

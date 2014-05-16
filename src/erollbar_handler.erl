@@ -80,15 +80,13 @@ code_change(_OldVsn, State, _Extra) ->
 % Internal
 maybe_send_batch(Item, #state{batch_max=BatchMax,
                               items=Items}=State) when length(Items) + 1 >= BatchMax ->
-    send_items(State#state{items=Items++[Item]});
+    send_items(State#state{items=[Item | Items]});
 maybe_send_batch(Item, #state{items=Items}=State) ->
-    State#state{items=Items++[Item]}.
+    State#state{items=[Item | Items]}.
 
-send_items(#state{items=[]}=State) ->
-    State;
-send_items(#state{items=[Item|Items], info_fun=InfoFun, endpoint=Endpoint,
+send_items(#state{items=Items, info_fun=InfoFun, endpoint=Endpoint,
                   access_token=AccessToken, details=Details}=State) ->
-    Message = create_message(AccessToken, Item, Details),
+    Message = create_message(AccessToken, Items, Details),
     case erollbar_utils:request(Endpoint, Message, ?HTTP_TIMEOUT) of
         ok -> ok;
         {error, Code, Body} ->
@@ -101,23 +99,30 @@ send_items(#state{items=[Item|Items], info_fun=InfoFun, endpoint=Endpoint,
                            {at, send_items},
                            {reason, Reason}])
     end,
-    send_items(State#state{items=Items}).
+    State#state{items = []}.
 
-create_message(AccessToken, Item, #details{environment=Environment,
-                                           host=Host,
-                                           branch=Branch,
-                                           sha=Sha}) ->
+create_message(AccessToken, Items, Details) ->
+    ItemBlocks = create_items_block(Items, [], Details),
     Message = [{<<"access_token">>, AccessToken},
-                {<<"data">>, [{<<"environment">>, Environment},
-                              {<<"body">>, Item}]}],
-    Message1 =
+               {<<"data">>, ItemBlocks}],
+    jsx:encode(Message).
+
+create_items_block([], Retval, _) ->
+    Retval;
+create_items_block([Item|Items], Retval, #details{environment=Environment,
+                                                  host=Host,
+                                                  branch=Branch,
+                                                  sha=Sha}=Details) ->
+    ItemBlock = [{<<"environment">>, Environment},
+                 {<<"body">>, Item}],
+    ItemBlock1 =
         case create_server_block(Host, Branch, Sha) of
             [] ->
-                Message;
-             ServerBlock ->
-                Message ++ [{<<"server">>, ServerBlock}]
+                ItemBlock;
+            ServerBlock ->
+                [{<<"server">>, ServerBlock} | ItemBlock]
         end,
-    jsx:encode(Message1).
+    create_items_block(Items, [ItemBlock1 | Retval], Details).
 
 create_server_block(Host, Branch, Sha) ->
     Block = add_to_block(<<"host">>, Host, []),
@@ -127,7 +132,7 @@ create_server_block(Host, Branch, Sha) ->
 add_to_block(_, undefined, Block) ->
     Block;
 add_to_block(Key, Val, Block) ->
-    Block++[{Key, Val}].
+    [{Key, Val} | Block].
 
 maybe_create_item(Report, undefined, Details) ->
     erollbar_parser:parse(Report, Details);
@@ -141,5 +146,7 @@ maybe_create_item({error_report, _, {_, crash_report, [Report, Neighbors]}} = Re
             undefined
     end.
 
+info({M, F}, Details) ->
+    M:F(Details);
 info(InfoFun, Details) ->
     InfoFun(Details).

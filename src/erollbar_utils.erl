@@ -7,7 +7,7 @@
                      ok|{error, pos_integer(), binary()}|
                      {error, term()}.
 request(Endpoint, Message, Timeout) ->
-    Resource = <<Endpoint/binary, "/item/">>,
+    Resource = <<Endpoint/binary, "/items/">>,
     case hackney:request(post, Resource, [{<<"content-type">>, <<"application/json">>}],
                          Message, [{timeout, Timeout}]) of
         {ok, 200, _Headers, ClientRef} ->
