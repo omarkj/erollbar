@@ -1,5 +1,6 @@
 -module(erollbar_parser).
 -include("erollbar.hrl").
+
 -export([initial_call/1
         ,parse/2]).
 
