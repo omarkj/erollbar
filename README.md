@@ -16,7 +16,8 @@ Error handler that posts crash reports to Rollbar.com.
                {host, binary()}|
                {root, binary()}|
                {branch, binary()}|
-               {sha, binary()}.
+               {sha, binary()}|
+               send_args.
 -type opts() :: [opt()]|[].
 -spec start(access_token()) -> ok.
 -spec start(access_token(), opts()) -> ok.

@@ -38,7 +38,8 @@ init([AccessToken, Opts]) ->
                                  environment=proplists:get_value(environment, Opts),
                                  host=proplists:get_value(host, Opts),
                                  branch=proplists:get_value(branch, Opts),
-                                 sha=proplists:get_value(sha, Opts)}
+                                 sha=proplists:get_value(sha, Opts),
+                                 send_args=lists:member(send_args, Opts)}
                }}.
 
 handle_event({error_report, _, {_, crash_report, _}} = ErrorReport,

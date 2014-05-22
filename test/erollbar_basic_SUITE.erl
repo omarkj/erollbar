@@ -11,6 +11,7 @@
 -export([default_settings/1
         ,max_time/1
         ,bigger_crash/1
+        ,crash_with_args/1
         ]).
 
 -export([server/2]).
@@ -19,6 +20,7 @@ all() ->
     [default_settings
     ,max_time
     ,bigger_crash
+    ,crash_with_args
     ].
 
 init_per_suite(Config) ->
@@ -110,6 +112,33 @@ bigger_crash(Config) ->
     <<"error">> = proplists:get_value(<<"level">>, BodyPart),
     <<"beam">> = proplists:get_value(<<"platform">>, BodyPart),
     <<"erlang">> = proplists:get_value(<<"language">>, BodyPart),
+    Trace = proplists:get_value(<<"trace">>, BodyPart),
+    [Frame1, _, _, _] = proplists:get_value(<<"frames">>, Trace),
+    <<"insert/2">> = proplists:get_value(<<"method">>, Frame1),
+    Filename = proplists:get_value(<<"filename">>, Frame1),
+    {_, _} = binary:match(Filename, <<"ets.erl">>),
+    undefined = proplists:get_value(<<"args">>, Frame1),
+    Config.
+
+crash_with_args(Config) ->
+    Self = self(),
+    Port = create([{ondata, fun(ASocket, Data, _) ->
+                                    Self ! Data,
+                                    gen_tcp:send(ASocket, "HTTP/1.1 200 OK\r\n\r\n"),
+                                    die
+                            end}]),
+    AccessCode = <<"test_code">>,
+    erollbar:start(AccessCode, [{endpoint,
+                                 list_to_binary("http://localhost:"++integer_to_list(Port))}
+                               ,{batch_max, 0}, send_args]),
+    {ok, Pid} = erollbar_crasher:start(),
+    catch erollbar_crasher:crash_on_ets(Pid),
+    timer:sleep(10),
+    [Data] = get_msg(1),
+    Body = parse_http(Data),
+    BodyParsed = jsx:decode(Body),
+    [DataPart] = proplists:get_value(<<"data">>, BodyParsed),
+    BodyPart = proplists:get_value(<<"body">>, DataPart),
     Trace = proplists:get_value(<<"trace">>, BodyPart),
     [Frame1, _, _, _] = proplists:get_value(<<"frames">>, Trace),
     <<"insert">> = proplists:get_value(<<"method">>, Frame1),

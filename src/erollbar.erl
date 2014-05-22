@@ -13,7 +13,8 @@
                {host, binary()}|
                {root, binary()}|
                {branch, binary()}|
-               {sha, binary()}.
+               {sha, binary()}|
+               send_args.
 -type opts() :: [opt()].
 -define(ENDPOINT, <<"https://api.rollbar.com/api/1">>).
 -define(HANDLER_NAME, erollbar_handler).
@@ -68,6 +69,13 @@ validate_opts([{Key, _}=Pair|Rest], Retval) ->
             validate_opts(Rest, [Pair | Retval]);
         false ->
             throw({invalid_config, Key})
+    end;
+validate_opts([Opt|Rest], Retval) ->
+    case lists:member(Opt, [send_args]) of
+        true ->
+            validate_opts(Rest, [Opt | Retval]);
+        false ->
+            throw({invalid_config, Opt})
     end.
 
 info(Details) ->
