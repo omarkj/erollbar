@@ -7,7 +7,6 @@ Error handler that posts crash reports to Rollbar.com.
 ``` erlang
 -type access_token() :: binary().
 -type opt() :: {modules, [module()]}|
-               {applications, [atom()]}|
                {environment, binary()}|
                {platform, binary()}|
                {batch_max, pos_integer()}|

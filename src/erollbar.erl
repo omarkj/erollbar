@@ -4,7 +4,6 @@
 -type ms() :: non_neg_integer().
 -type info_fun() :: fun(([term()]) -> any())|{atom(), atom()}.
 -type opt() :: {modules, [module()]}|
-               {applications, [atom()]}|
                {environment, binary()}|
                {platform, binary()}|
                {batch_max, pos_integer()}|
@@ -62,21 +61,6 @@ validate_opts([], Retval) ->
     Retval;
 validate_opts([{modules, ModuleList}|Rest], Retval) ->
     validate_opts(Rest, [{modules, lists:usort(ModuleList)} | Retval]);
-validate_opts([{applications, ApplicationList}|Rest], Retval) ->
-    AppModules = get_application_modules(ApplicationList, []),
-    CurrentModules =
-        case proplists:get_value(modules, Rest) of
-            undefined ->
-                proplists:get_value(modules, Retval, []);
-            Modules when is_list(Modules) ->
-                Modules;
-            _ ->
-                throw({invalid_config, modules})
-        end,
-    Rest1 = lists:keydelete(modules, 1, Rest),
-    Retval1 = lists:keydelete(modules, 1, Retval),
-    validate_opts(Rest1, [{modules, lists:usort(AppModules ++ CurrentModules)},
-                          {application, ApplicationList} | Retval1]);
 validate_opts([{Key, _}=Pair|Rest], Retval) ->
     case lists:member(Key, [environment, batch_max, host, endpoint, root, branch,
                             sha, platform, info_fun, time_max]) of
@@ -85,12 +69,6 @@ validate_opts([{Key, _}=Pair|Rest], Retval) ->
         false ->
             throw({invalid_config, Key})
     end.
-
-get_application_modules([], Retval) ->
-    Retval;
-get_application_modules([App|Rest], Retval) ->
-    {ok, Modules} = application:get_key(App, modules),
-    get_application_modules(Rest, [Modules | Retval]).
 
 info(Details) ->
     {FmtStr, FmtList} = lists:foldl(
