@@ -2,5 +2,7 @@
                   environment :: binary()|undefined,
                   host :: binary()|undefined,
                   branch :: binary()|undefined,
-                  sha :: binary()|undefined}).
+                  sha :: binary()|undefined,
+                  send_args :: boolean()
+                 }).
                          
