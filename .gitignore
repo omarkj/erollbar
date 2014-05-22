@@ -3,3 +3,4 @@ logs/
 ebin/
 *.beam
 *.dump
+.rebar
