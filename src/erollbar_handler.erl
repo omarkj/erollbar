@@ -2,24 +2,25 @@
 -behaviour(gen_event).
 -include("erollbar.hrl").
 -record(state, {access_token :: erollbar:access_token(),
-                modules = undefined :: undefined|[module()],
                 items = [] :: [term()]|[],
                 batch_max :: pos_integer()|undefined,
                 time_max :: erollbar:ms()|undefined,
                 time_ref :: reference()|undefined,
                 endpoint :: binary(),
                 info_fun :: erollbar:info_fun(),
+                filter :: erollbar:filter(),
+                http_timeout :: non_neg_integer(),
                 details :: #details{}
                }).
 
 -define(HTTP_TIMEOUT, 5000).
 
 -export([init/1
-         ,handle_event/2
-         ,handle_call/2
-         ,handle_info/2
-         ,terminate/2
-         ,code_change/3]).
+        ,handle_event/2
+        ,handle_call/2
+        ,handle_info/2
+        ,terminate/2
+        ,code_change/3]).
 
 init([AccessToken, Opts]) ->
     TimeMax = proplists:get_value(time_max, Opts),
@@ -28,12 +29,13 @@ init([AccessToken, Opts]) ->
                  true -> undefined
               end,
     {ok, #state{access_token=AccessToken,
-                modules=proplists:get_value(modules, Opts),
                 batch_max=proplists:get_value(batch_max, Opts),
                 time_max=TimeMax,
                 time_ref=TimeRef,
                 info_fun=proplists:get_value(info_fun, Opts),
                 endpoint=proplists:get_value(endpoint, Opts),
+                filter=proplists:get_value(filter, Opts),
+                http_timeout=proplists:get_value(http_timeout, Opts),
                 details=#details{platform=proplists:get_value(platform, Opts),
                                  environment=proplists:get_value(environment, Opts),
                                  host=proplists:get_value(host, Opts),
@@ -42,14 +44,17 @@ init([AccessToken, Opts]) ->
                                  send_args=lists:member(send_args, Opts)}
                }}.
 
-handle_event({error_report, _, {_, crash_report, _}} = ErrorReport,
-             #state{modules=Modules, details=Details}=State) ->
-    case maybe_create_item(ErrorReport, Modules, Details) of
-        undefined ->
-            {ok, State};
-        {ok, Item} ->
+handle_event({error_report, _, {_, crash_report, _}} = Report,
+             #state{details=Details,
+                    filter=Filter}=State) ->
+    InitialCall = erollbar_parser:initial_call(Report),
+    case filter(Filter, InitialCall) of
+        ok ->
+            {ok, Item} = erollbar_parser:parse(Report, Details),
             State1 = maybe_send_batch(Item, State),
-            {ok, State1}
+            {ok, State1};
+        drop ->
+            {ok, State}
     end;
 handle_event(_, State) ->
     {ok, State}.
@@ -86,9 +91,10 @@ maybe_send_batch(Item, #state{items=Items}=State) ->
     State#state{items=[Item | Items]}.
 
 send_items(#state{items=Items, info_fun=InfoFun, endpoint=Endpoint,
-                  access_token=AccessToken, details=Details}=State) ->
+                  access_token=AccessToken, details=Details,
+                  http_timeout=HttpTimeout}=State) ->
     Message = create_message(AccessToken, Items, Details),
-    case erollbar_utils:request(Endpoint, Message, ?HTTP_TIMEOUT) of
+    case erollbar_utils:request(Endpoint, Message, HttpTimeout) of
         ok -> ok;
         {error, Code, Body} ->
             info(InfoFun, [{mod, erollbar_handler},
@@ -135,19 +141,10 @@ add_to_block(_, undefined, Block) ->
 add_to_block(Key, Val, Block) ->
     [{Key, Val} | Block].
 
-maybe_create_item(Report, undefined, Details) ->
-    erollbar_parser:parse(Report, Details);
-maybe_create_item({error_report, _, {_, crash_report, [Report, Neighbors]}} = Report,
-                  Modules, Details) ->
-    Module = erollbar_parser:initial_call(Report),
-    case lists:member(Module, Modules) of
-        true ->
-            erollbar_parser:parse(Report, Details);
-        false ->
-            undefined
-    end.
-
-info({M, F}, Details) ->
-    M:F(Details);
 info(InfoFun, Details) ->
     InfoFun(Details).
+
+filter(undefined, _) ->
+    ok;
+filter(Filter, InitialCall) ->
+    Filter(InitialCall).

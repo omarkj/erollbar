@@ -2,9 +2,9 @@
 
 -type access_token() :: binary().
 -type ms() :: non_neg_integer().
--type info_fun() :: fun(([term()]) -> any())|{atom(), atom()}.
--type opt() :: {modules, [module()]}|
-               {environment, binary()}|
+-type info_fun() :: fun(([term()]) -> any()).
+-type filter() :: fun((module()) -> ok | drop).
+-type opt() :: {environment, binary()}|
                {platform, binary()}|
                {batch_max, pos_integer()}|
                {time_max, ms()}|
@@ -14,18 +14,22 @@
                {root, binary()}|
                {branch, binary()}|
                {sha, binary()}|
+               {filter, filter()}|
+               {http_timeout, non_neg_integer()}|
                send_args.
 -type opts() :: [opt()].
+-define(HTTP_TIMEOUT, 5000).
 -define(ENDPOINT, <<"https://api.rollbar.com/api/1">>).
 -define(HANDLER_NAME, erollbar_handler).
 -export_type([access_token/0
-              ,opt/0
-              ,opts/0
-              ,info_fun/0
-              ,ms/0]).
+             ,opt/0
+             ,opts/0
+             ,info_fun/0
+             ,filter/0
+             ,ms/0]).
 -export([start/1
-         ,start/2,
-         stop/0]).
+        ,start/2
+        ,stop/0]).
 
 -spec start(access_token()) -> ok.
 start(AccessToken) ->
@@ -34,11 +38,12 @@ start(AccessToken) ->
 -spec start(access_token(), opts()) -> ok.
 start(AccessToken, Opts) ->
     Opts1 = set_defaults([{environment, <<"prod">>}
-                          ,{platform, <<"beam">>}
-                          ,{batch_max, 10}
-                          ,{endpoint, ?ENDPOINT}
-                          ,{info_fun, fun info/1}
-                          ,{host, hostname()}
+                         ,{platform, <<"beam">>}
+                         ,{batch_max, 10}
+                         ,{endpoint, ?ENDPOINT}
+                         ,{info_fun, fun info/1}
+                         ,{host, hostname()}
+                         ,{http_timeout, ?HTTP_TIMEOUT}
                          ], Opts),
     Opts2 = validate_opts(Opts1, []),
     ok = error_logger:add_report_handler(?HANDLER_NAME, [AccessToken, Opts2]).
@@ -60,11 +65,9 @@ set_defaults([{Key, _}=Pair|Rest], Opts) ->
 
 validate_opts([], Retval) ->
     Retval;
-validate_opts([{modules, ModuleList}|Rest], Retval) ->
-    validate_opts(Rest, [{modules, lists:usort(ModuleList)} | Retval]);
 validate_opts([{Key, _}=Pair|Rest], Retval) ->
     case lists:member(Key, [environment, batch_max, host, endpoint, root, branch,
-                            sha, platform, info_fun, time_max]) of
+                            sha, platform, info_fun, time_max, filter, http_timeout]) of
         true ->
             validate_opts(Rest, [Pair | Retval]);
         false ->
@@ -86,7 +89,6 @@ info(Details) ->
                                   {FmtStr ++ " ~p=~p", FmtLst ++ [K, V]}
                           end,
                           {undefined, []}, Details),
-    ct:pal("called info"),
     error_logger:info_msg(FmtStr, FmtList).
 
 hostname() ->
