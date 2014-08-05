@@ -46,13 +46,22 @@ init([AccessToken, Opts]) ->
 
 handle_event({error_report, _, {_, crash_report, _}} = Report,
              #state{details=Details,
-                    filter=Filter}=State) ->
+                    filter=Filter,
+                    info_fun=InfoFun}=State) ->
     InitialCall = erollbar_parser:initial_call(Report),
     case filter(Filter, InitialCall) of
         ok ->
-            {ok, Item} = erollbar_parser:parse(Report, Details),
-            State1 = maybe_send_batch(Item, State),
-            {ok, State1};
+            try erollbar_parser:parse(Report, Details) of
+                {ok, Item} ->
+                    State1 = maybe_send_batch(Item, State),
+                    {ok, State1}
+            catch
+                _:Reason ->
+                    info(InfoFun, [{mod, erollbar_handler},
+                                   {at, handle_event},
+                                   {reason, Reason},
+                                   {body, Report}])
+            end;
         drop ->
             {ok, State}
     end;
