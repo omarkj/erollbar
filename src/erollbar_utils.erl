@@ -21,7 +21,7 @@ request(Endpoint, Message, Timeout) ->
             E
     end.
 
--spec to_binary(binary()|list()|integer()|float()) ->
+-spec to_binary(binary()|list()|integer()|float()|atom()) ->
                        binary().
 to_binary(B) when is_binary(B) ->
     B;
