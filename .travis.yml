@@ -1,6 +1,6 @@
 language: erlang
 script:
-  - mkdir -p logs; rebar compile && ct_run -dir test/ -logdir logs -pa ebin -pa deps/*/ebin
+  - mkdir -p logs; rebar get-deps compile && ct_run -dir test/ -logdir logs -pa ebin -pa deps/*/ebin
 otp_release:
   - 17.1
   - 17.0
