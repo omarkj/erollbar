@@ -1,5 +1,7 @@
 # Erollbar
 
+[![Build Status](https://travis-ci.org/omarkj/erollbar.svg?branch=master)](https://travis-ci.org/omarkj/erollbar)
+
 Error handler that posts crash reports to Rollbar.com.
 
 ## Usage
@@ -12,7 +14,6 @@ Error handler that posts crash reports to Rollbar.com.
                {batch_max, pos_integer()}|
                {time_max, ms()}|
                {endpoint, binary()}|
-               {info_fun, info_fun()}|
                {host, binary()}|
                {root, binary()}|
                {branch, binary()}|
@@ -27,7 +28,8 @@ Error handler that posts crash reports to Rollbar.com.
 ## Running the tests
 
 ``` bash
-$ rebar ct skip_deps=true
+$ rebar get-deps compile
+$ ct_run -dir test/ -logdir logs -pa ebin -pa deps/*/ebin
 ```
 
 ## License
