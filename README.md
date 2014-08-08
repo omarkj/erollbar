@@ -26,7 +26,8 @@ Error handler that posts crash reports to Rollbar.com.
 ## Running the tests
 
 ``` bash
-$ rebar ct skip_deps=true
+$ rebar get-deps compile
+$ ct_run -dir test/ -logdir logs -pa ebin -pa deps/*/ebin
 ```
 
 ## License
