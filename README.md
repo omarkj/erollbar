@@ -1,5 +1,7 @@
 # Erollbar
 
+[![Build Status](https://travis-ci.org/omarkj/erollbar.svg?branch=master)](https://travis-ci.org/omarkj/erollbar)
+
 Error handler that posts crash reports to Rollbar.com.
 
 ## Usage
