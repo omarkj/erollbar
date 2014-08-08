@@ -23,7 +23,8 @@
              ,ms/0]).
 -export([start/1
         ,start/2
-        ,stop/0]).
+        ,stop/0
+        ,default_filter/1]).
 
 -spec start(access_token()) -> ok.
 start(AccessToken) ->
@@ -36,6 +37,7 @@ start(AccessToken, Opts) ->
                          ,{batch_max, config(batch_max)}
                          ,{endpoint, config(endpoint)}
                          ,{host, hostname()}
+                         ,{filter, fun default_filter/1}
                          ,{http_timeout, config(http_timeout)}
                          ], Opts),
     Opts2 = validate_opts(Opts1, []),
@@ -78,11 +80,20 @@ hostname() ->
     {ok, Hostname} = inet:gethostname(),
     list_to_binary(Hostname).
 
+%% The default filter filters out messages that are also sent as crash_reports, this
+%% is to prevent double reporting. It's available as an export and c,an be used in
+%% other filters.
+default_filter([error, "** Generic server ~p terminating \n** Last message" ++
+                    " in was ~p~n** When Server state == ~p~n**" ++
+                    " Reason for termination == ~n** ~p~n", _Data]) ->
+    drop;
+default_filter(_) ->
+    ok.
+
 config(Key) ->
     case application:get_env(erollbar, Key) of
         {ok, Val} ->
             Val;
         _ ->
-            error_logger:info_msg("Key is ~p", [Key]),
             throw({missing_config, Key})
     end.

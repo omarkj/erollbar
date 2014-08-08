@@ -12,6 +12,7 @@
         ,max_time/1
         ,bigger_crash/1
         ,crash_with_args/1
+        ,error/1
         ]).
 
 -export([server/2]).
@@ -21,6 +22,7 @@ all() ->
     ,max_time
     ,bigger_crash
     ,crash_with_args
+    ,error
     ].
 
 init_per_suite(Config) ->
@@ -35,9 +37,7 @@ init_per_testcase(_, Config) ->
     Config.
 
 end_per_testcase(_, Config) ->
-    ct:pal("stopping"),
     ok = erollbar:stop(),
-    ct:pal("stopped"),
     Config.
     
 %% Tests
@@ -148,6 +148,33 @@ crash_with_args(Config) ->
     Filename = proplists:get_value(<<"filename">>, Frame1),
     {_, _} = binary:match(Filename, <<"ets.erl">>),
     [<<"heh">>, <<"bye">>] = proplists:get_value(<<"args">>, Frame1),
+    true = lists:member(erollbar_handler, gen_event:which_handlers(error_logger)),
+    Config.
+
+error(Config) ->
+    Self = self(),
+    Port = create([{ondata, fun(ASocket, Data, _) ->
+                                    Self ! Data,
+                                    gen_tcp:send(ASocket, "HTTP/1.1 200 OK\r\n\r\n"),
+                                    die
+                            end}]),
+    AccessCode = <<"test_code">>,
+    erollbar:start(AccessCode, [{endpoint, list_to_binary("http://127.0.0.1:"++integer_to_list(Port))},
+                                {batch_max, 0}]),
+    error_logger:error_msg("ERROR IN ~p", [here]),
+    [Data] = get_msg(1),
+    Body = parse_http(Data),
+    BodyParsed = jsx:decode(Body),
+    AccessCode = proplists:get_value(<<"access_token">>, BodyParsed),
+    [DataPart] = proplists:get_value(<<"data">>, BodyParsed),
+    <<"prod">> = proplists:get_value(<<"environment">>, DataPart),
+    BodyPart = proplists:get_value(<<"body">>, DataPart),
+    <<"error">> = proplists:get_value(<<"level">>, BodyPart),
+    <<"beam">> = proplists:get_value(<<"platform">>, BodyPart),
+    <<"erlang">> = proplists:get_value(<<"language">>, BodyPart),
+    Message = proplists:get_value(<<"message">>, BodyPart),
+    <<"ERROR IN here">> = proplists:get_value(<<"body">>, Message),
+    <<"error">> = proplists:get_value(<<"type">>, Message),
     true = lists:member(erollbar_handler, gen_event:which_handlers(error_logger)),
     Config.
 

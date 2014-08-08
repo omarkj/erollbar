@@ -2,8 +2,9 @@
 
 -export([prime/1
         ,initial_call/1
-        ,parse/2
-        ,create_message/3
+        ,parse_report/2
+        ,parse_message/4
+        ,encode_message/3
         ]).
 
 -record(details, {platform :: binary()|undefined,
@@ -26,8 +27,7 @@ initial_call({_, _, {_, _, [Report, _]}}) ->
     {Module, _, _} = proplists:get_value(initial_call, Report),
     Module.
 
-
-parse({_, _, {_, _, [Report, _]}}, #details{platform=Platform}=Details) ->
+parse_report({_, _, {_, _, [Report, _]}}, #details{platform=Platform}=Details) ->
     ErrorInfo = proplists:get_value(error_info, Report, []),
     Item = [{<<"trace">>, create_trace(ErrorInfo, Details)},
             {<<"level">>, <<"error">>},
@@ -36,40 +36,25 @@ parse({_, _, {_, _, [Report, _]}}, #details{platform=Platform}=Details) ->
             {<<"language">>, <<"erlang">>}],
     {ok, Item}.
 
-create_message(AccessToken, Items, Details) ->
+parse_message(Type, Format, Data, #details{platform=Platform}) ->
+    Item = [{<<"message">>, create_message(Type, Format, Data)},
+            {<<"level">>, <<"error">>},
+            {<<"timestamp">>, unix_timestamp()},
+            {<<"platform">>, Platform},
+            {<<"language">>, <<"erlang">>}],
+    {ok, Item}.
+
+encode_message(AccessToken, Items, Details) ->
     ItemBlocks = create_items_block(Items, [], Details),
     Message = [{<<"access_token">>, AccessToken},
                {<<"data">>, ItemBlocks}],
     jsx:encode(Message).
 
-create_items_block([], Retval, _) ->
-    Retval;
-create_items_block([Item|Items], Retval, #details{environment=Environment,
-                                                  host=Host,
-                                                  branch=Branch,
-                                                  sha=Sha}=Details) ->
-    ItemBlock = [{<<"environment">>, Environment},
-                 {<<"body">>, Item}],
-    ItemBlock1 =
-        case create_server_block(Host, Branch, Sha) of
-            [] ->
-                ItemBlock;
-            ServerBlock ->
-                [{<<"server">>, ServerBlock} | ItemBlock]
-        end,
-    create_items_block(Items, [ItemBlock1 | Retval], Details).
-
-create_server_block(Host, Branch, Sha) ->
-    Block = add_to_block(<<"host">>, Host, []),
-    Block1 = add_to_block(<<"branch">>, Branch, Block),
-    add_to_block(<<"sha">>, Sha, Block1).
-
-add_to_block(_, undefined, Block) ->
-    Block;
-add_to_block(Key, Val, Block) ->
-    [{Key, Val} | Block].
-
 % Internal
+create_message(MessageType, Format, Data) ->
+    [{<<"body">>, to_binary(io_lib:format(Format, Data))},
+     {<<"type">>, to_binary(MessageType)}].
+
 create_trace({_Error, ExceptionExit, Frames}, Details) when is_atom(ExceptionExit) ->
     [{<<"frames">>, create_frames(Frames, Details, [])},
      {<<"exception">>, [{<<"class">>, to_binary(ExceptionExit)}]}];
@@ -106,6 +91,33 @@ add_lineno(_, Frame) ->
 unix_timestamp() ->
     {Mega, Secs, _} = now(),
     to_binary(Mega*1000000 + Secs).
+
+create_items_block([], Retval, _) ->
+    Retval;
+create_items_block([Item|Items], Retval, #details{environment=Environment,
+                                                  host=Host,
+                                                  branch=Branch,
+                                                  sha=Sha}=Details) ->
+    ItemBlock = [{<<"environment">>, Environment},
+                 {<<"body">>, Item}],
+    ItemBlock1 =
+        case create_server_block(Host, Branch, Sha) of
+            [] ->
+                ItemBlock;
+            ServerBlock ->
+                [{<<"server">>, ServerBlock} | ItemBlock]
+        end,
+    create_items_block(Items, [ItemBlock1 | Retval], Details).
+
+create_server_block(Host, Branch, Sha) ->
+    Block = add_to_block(<<"host">>, Host, []),
+    Block1 = add_to_block(<<"branch">>, Branch, Block),
+    add_to_block(<<"sha">>, Sha, Block1).
+
+add_to_block(_, undefined, Block) ->
+    Block;
+add_to_block(Key, Val, Block) ->
+    [{Key, Val} | Block].
 
 -spec to_binary(binary()|list()|integer()|float()|atom()) ->
                        binary().
