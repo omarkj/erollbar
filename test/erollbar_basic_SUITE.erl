@@ -25,7 +25,7 @@ all() ->
 
 init_per_suite(Config) ->
     ok = application:start(sasl),
-    {ok, _} = application:ensure_all_started(hackney),
+    {ok, _} = application:ensure_all_started(erollbar),
     Config.
 
 end_per_suite(Config) ->

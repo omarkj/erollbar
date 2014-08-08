@@ -8,5 +8,10 @@
                   stdlib,
                   sasl,
                   hackney
-                 ]}
+                 ]},
+  {env, [{endpoint, <<"https://api.rollbar.com/api/1">>},
+         {http_timeout, 1000},
+         {endpoint_pool, 10},
+         {batch_max, 10}
+        ]}
  ]}.

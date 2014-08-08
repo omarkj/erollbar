@@ -18,8 +18,6 @@
                {http_timeout, non_neg_integer()}|
                send_args.
 -type opts() :: [opt()].
--define(HTTP_TIMEOUT, 5000).
--define(ENDPOINT, <<"https://api.rollbar.com/api/1">>).
 -define(HANDLER_NAME, erollbar_handler).
 -export_type([access_token/0
              ,opt/0
@@ -39,11 +37,11 @@ start(AccessToken) ->
 start(AccessToken, Opts) ->
     Opts1 = set_defaults([{environment, <<"prod">>}
                          ,{platform, <<"beam">>}
-                         ,{batch_max, 10}
-                         ,{endpoint, ?ENDPOINT}
                          ,{info_fun, fun info/1}
+                         ,{batch_max, config(batch_max)}
+                         ,{endpoint, config(endpoint)}
                          ,{host, hostname()}
-                         ,{http_timeout, ?HTTP_TIMEOUT}
+                         ,{http_timeout, config(http_timeout)}
                          ], Opts),
     Opts2 = validate_opts(Opts1, []),
     ok = error_logger:add_report_handler(?HANDLER_NAME, [AccessToken, Opts2]).
@@ -94,3 +92,12 @@ info(Details) ->
 hostname() ->
     {ok, Hostname} = inet:gethostname(),
     list_to_binary(Hostname).
+
+config(Key) ->
+    case application:get_env(erollbar, Key) of
+        {ok, Val} ->
+            Val;
+        _ ->
+            error_logger:info_msg("Key is ~p", [Key]),
+            throw({missing_config, Key})
+    end.
