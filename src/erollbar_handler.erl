@@ -45,7 +45,7 @@ handle_event({error_report, _, {_, crash_report, _}} = Report,
     InitialCall = erollbar_parser:initial_call(Report),
     case filter(Filter, InitialCall) of
         ok ->
-            try erollbar_parser:parse(Report, Details) of
+            try erollbar_parser:parse_report(Report, Details) of
                 {ok, Item} ->
                     State1 = maybe_send_batch(Item, State),
                     {ok, State1}
@@ -55,6 +55,23 @@ handle_event({error_report, _, {_, crash_report, _}} = Report,
                           {at, handle_event},
                           {reason, Reason},
                           {body, Report}])
+            end;
+        drop ->
+            {ok, State}
+    end;
+handle_event({error, _, {_, Format, Data}} = Error, #state{details=Details, filter=Filter}=State) ->
+    case filter(Filter, [error, Format, Data]) of
+        ok ->
+            try erollbar_parser:parse_message(error, Format, Data, Details) of
+                {ok, Item} ->
+                    State1 = maybe_send_batch(Item, State),
+                    {ok, State1}
+            catch
+                _:Reason ->
+                    info([{mod, erollbar_handler},
+                          {at, handle_event},
+                          {reason, Reason},
+                          {body, Error}])
             end;
         drop ->
             {ok, State}
@@ -119,6 +136,8 @@ maybe_send_batch(Item, #state{batch_max=BatchMax,
 maybe_send_batch(Item, #state{items=Items}=State) ->
     State#state{items=[Item | Items]}.
 
+send_items(#state{items=[]}=State) ->
+    State;
 send_items(#state{requests=Requests, items=Items}=State) when length(Requests) >= ?MAX_CONN ->
     %% All connections are in use. We need to drop this payload and log
     info([{mod, erollbar_handler},
@@ -129,7 +148,7 @@ send_items(#state{requests=Requests, items=Items}=State) when length(Requests) >
 send_items(#state{items=Items, requests=Requests, endpoint=Endpoint,
                   access_token=AccessToken, details=Details,
                   http_timeout=HttpTimeout}=State) ->
-    Message = erollbar_parser:create_message(AccessToken, Items, Details),
+    Message = erollbar_parser:encode_message(AccessToken, Items, Details),
     case request(Endpoint, Message, HttpTimeout) of
         {ok, RequestRef} ->
             State#state{items = [], requests = [{RequestRef, length(Items)} | Requests]};
