@@ -71,6 +71,7 @@ default_settings(Config) ->
     ServerPart = proplists:get_value(<<"server">>, DataPart),
     {ok, Hostname} = inet:gethostname(),
     Hostname = binary_to_list(proplists:get_value(<<"host">>, ServerPart)),
+    true = lists:member(erollbar_handler, gen_event:which_handlers(error_logger)),
     Config.
 
 max_time(Config) ->
@@ -86,6 +87,7 @@ max_time(Config) ->
     proc_lib:spawn(fun() -> 1/0 end),
     timer:sleep(10),
     [_] = get_msg(1),
+    true = lists:member(erollbar_handler, gen_event:which_handlers(error_logger)),
     Config.
 
 bigger_crash(Config) ->
@@ -118,6 +120,7 @@ bigger_crash(Config) ->
     Filename = proplists:get_value(<<"filename">>, Frame1),
     {_, _} = binary:match(Filename, <<"ets.erl">>),
     undefined = proplists:get_value(<<"args">>, Frame1),
+    true = lists:member(erollbar_handler, gen_event:which_handlers(error_logger)),
     Config.
 
 crash_with_args(Config) ->
@@ -145,6 +148,7 @@ crash_with_args(Config) ->
     Filename = proplists:get_value(<<"filename">>, Frame1),
     {_, _} = binary:match(Filename, <<"ets.erl">>),
     [<<"heh">>, <<"bye">>] = proplists:get_value(<<"args">>, Frame1),
+    true = lists:member(erollbar_handler, gen_event:which_handlers(error_logger)),
     Config.
 
 % Internal
