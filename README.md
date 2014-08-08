@@ -12,7 +12,6 @@ Error handler that posts crash reports to Rollbar.com.
                {batch_max, pos_integer()}|
                {time_max, ms()}|
                {endpoint, binary()}|
-               {info_fun, info_fun()}|
                {host, binary()}|
                {root, binary()}|
                {branch, binary()}|
