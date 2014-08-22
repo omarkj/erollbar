@@ -18,7 +18,7 @@ create(Opts) ->
              send_args=lists:member(send_args, Opts)}.
 
 encode(Items, AccessToken, Details) ->
-    [{<<"access_token">>, to_binary(AccessToken)},
+    [{<<"access_token">>, AccessToken},
      {<<"data">>, [encode_item(Item, Details) || Item <- Items]}].
 
 % Internal
