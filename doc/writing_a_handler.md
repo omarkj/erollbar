@@ -27,7 +27,7 @@ Handler can also be defined in a module as a "regular" function.
 
 ## Creating a Trace
 
-A trace is a type of a message Rollbar.com understand. It has an exception and a trace. Since
+A trace is a type of a message Rollbar.com understands. It has an exceptions and frames. Since
 we are writing Erlang this will have to contain more than just exception, like exits etc.
 
 The first thing to do is to create a new Trace message with the exception class (in our case
