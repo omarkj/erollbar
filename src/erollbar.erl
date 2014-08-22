@@ -17,7 +17,8 @@
 -type opts() :: [opt()].
 -export_type([opt/0
              ,opts/0
-             ,ms/0]).
+             ,ms/0
+             ,access_token/0]).
 
 -export([start/1
         ,start/2

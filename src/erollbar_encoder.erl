@@ -10,6 +10,10 @@
                   send_args :: boolean()
                  }).
 
+-opaque encoder() :: #details{}.
+-export_type([encoder/0]).
+
+-spec create(erollbar:opts()) -> encoder().
 create(Opts) ->
     #details{platform=proplists:get_value(platform, Opts),
              environment=proplists:get_value(environment, Opts),
@@ -17,6 +21,8 @@ create(Opts) ->
              branch=proplists:get_value(branch, Opts),
              send_args=lists:member(send_args, Opts)}.
 
+-spec encode([erollbar_message:msg()], erollbar:access_token(), encoder()) ->
+                    [{binary(), term()}].
 encode(Items, AccessToken, Details) ->
     [{<<"access_token">>, AccessToken},
      {<<"data">>, [encode_item(Item, Details) || Item <- Items]}].
