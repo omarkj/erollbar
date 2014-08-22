@@ -13,6 +13,7 @@
         ,filter_erollbar/1
         ,crash_report/1
         ,error_msg/1
+        ,ranch_msg/1
         ]).
 
 -type handler() :: fun((term()) -> {ok, erollbar_message:erollbar_msg()}|pass|ignore).
@@ -65,7 +66,6 @@ crash_report({error_report, _, {_, crash_report, [Report, _]}}) ->
 crash_report(_) ->
     pass.
 
-
 %% @doc Handles error messages
 error_msg({error, _, {_, Format, Data}}) ->
     Message = erollbar_message:message(io_lib:format(Format, Data)),
@@ -73,6 +73,20 @@ error_msg({error, _, {_, Format, Data}}) ->
     Message2 = erollbar_message:level(error, Message1),
     {ok, Message2};
 error_msg(_) ->
+    pass.
+
+%% @doc Handles ranch error messages
+ranch_msg({error, _, {_, "Ranch listener ~p had connection process started with "
+                      "~p:start_link/4 at ~p exit with reason: ~999999p~n",
+                      [_Ref, Protocol, _Pid, {ExceptionExit, Frames}]}}) ->
+    TraceMessage = erollbar_message:trace(ExceptionExit),
+    ParsedFrames = create_frames(Frames),
+    TraceMessage1 = erollbar_message:frames(ParsedFrames, TraceMessage),
+    TraceMessage2 = erollbar_message:level(error, TraceMessage1),
+    TraceMessage3 = erollbar_message:message(io_lib:format("Ranch listener had a connection process with "
+                                                           "~p:start_link/4 exit", [Protocol]), TraceMessage2),
+    {ok, TraceMessage3};
+ranch_msg(_) ->
     pass.
 
 % Internal
