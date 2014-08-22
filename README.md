@@ -39,7 +39,7 @@ The possible options are
 * `host`: Host of the node where the message originates. Defaults to the servers' hostname;
 * `root`: Path of the application code root. No default;
 * `branch`: Currently running branch. No default;
-* `report_handlers`: List of handlers to run messages through. Defaults to `erollbar_handlers:default_handlers()`;
+* `report_handlers`: List of handlers to run messages through. Defaults to handlers for crash reports and error messages;
 * `send_args`: If this is set arguments are not scrubbed from frames.
 
 ## Running the tests
