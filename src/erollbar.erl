@@ -2,7 +2,6 @@
 
 -type access_token() :: binary().
 -type ms() :: non_neg_integer().
--type filter() :: fun((module()) -> ok | drop).
 -type opt() :: {environment, binary()}|
                {platform, binary()}|
                {batch_max, pos_integer()}|
@@ -12,19 +11,18 @@
                {root, binary()}|
                {branch, binary()}|
                {sha, binary()}|
-               {filter, filter()}|
                {http_timeout, non_neg_integer()}|
+               {report_handlers, [erollbar_handlers:handler()]}|
                send_args.
 -type opts() :: [opt()].
--export_type([access_token/0
-             ,opt/0
+-export_type([opt/0
              ,opts/0
-             ,filter/0
-             ,ms/0]).
+             ,ms/0
+             ,access_token/0]).
+
 -export([start/1
         ,start/2
-        ,stop/0
-        ,default_filter/1]).
+        ,stop/0]).
 
 -spec start(access_token()) -> ok.
 start(AccessToken) ->
@@ -32,12 +30,12 @@ start(AccessToken) ->
 
 -spec start(access_token(), opts()) -> ok.
 start(AccessToken, Opts) ->
-    Opts1 = set_defaults([{environment, <<"prod">>}
+    Opts1 = set_defaults([{environment, <<"default">>}
                          ,{platform, <<"beam">>}
                          ,{batch_max, config(batch_max)}
                          ,{endpoint, config(endpoint)}
                          ,{host, hostname()}
-                         ,{filter, fun default_filter/1}
+                         ,{report_handlers, erollbar_handlers:default_handlers()}
                          ,{http_timeout, config(http_timeout)}
                          ], Opts),
     Opts2 = validate_opts(Opts1, []),
@@ -62,7 +60,7 @@ validate_opts([], Retval) ->
     Retval;
 validate_opts([{Key, _}=Pair|Rest], Retval) ->
     case lists:member(Key, [environment, batch_max, host, endpoint, root, branch,
-                            sha, platform, time_max, filter, http_timeout]) of
+                            platform, time_max, http_timeout, report_handlers]) of
         true ->
             validate_opts(Rest, [Pair | Retval]);
         false ->
@@ -79,16 +77,6 @@ validate_opts([Opt|Rest], Retval) ->
 hostname() ->
     {ok, Hostname} = inet:gethostname(),
     list_to_binary(Hostname).
-
-%% The default filter filters out messages that are also sent as crash_reports, this
-%% is to prevent double reporting. It's available as an export and c,an be used in
-%% other filters.
-default_filter([error, "** Generic server ~p terminating \n** Last message" ++
-                    " in was ~p~n** When Server state == ~p~n**" ++
-                    " Reason for termination == ~n** ~p~n", _Data]) ->
-    drop;
-default_filter(_) ->
-    ok.
 
 config(Key) ->
     case application:get_env(erollbar, Key) of

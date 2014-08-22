@@ -2,13 +2,13 @@
 -behaviour(gen_event).
 
 -record(state, {access_token :: erollbar:access_token(),
+                report_handlers :: [erollbar_handlers:handler()],
                 items = [] :: [term()]|[],
                 requests = [] :: [{reference(), non_neg_integer()}],
                 batch_max :: pos_integer()|undefined,
                 time_max :: erollbar:ms()|undefined,
                 time_ref :: reference()|undefined,
                 endpoint :: binary(),
-                filter :: erollbar:filter(),
                 http_timeout :: non_neg_integer(),
                 details :: term()
                }).
@@ -34,48 +34,26 @@ init([AccessToken, Opts]) ->
                 time_max=TimeMax,
                 time_ref=TimeRef,
                 endpoint=proplists:get_value(endpoint, Opts),
-                filter=proplists:get_value(filter, Opts),
+                report_handlers=proplists:get_value(report_handlers, Opts),
                 http_timeout=proplists:get_value(http_timeout, Opts),
-                details=erollbar_parser:prime(Opts)
+                details=erollbar_encoder:create(Opts)
                }}.
 
-handle_event({error_report, _, {_, crash_report, _}} = Report,
-             #state{details=Details,
-                    filter=Filter}=State) ->
-    InitialCall = erollbar_parser:initial_call(Report),
-    case filter(Filter, InitialCall) of
-        ok ->
-            try erollbar_parser:parse_report(Report, Details) of
-                {ok, Item} ->
-                    State1 = maybe_send_batch(Item, State),
-                    {ok, State1}
-            catch
-                _:Reason ->
-                    info([{mod, erollbar_handler},
-                          {at, handle_event},
-                          {reason, Reason},
-                          {body, Report}])
-            end;
-        drop ->
-            {ok, State}
-    end;
-handle_event({error, _, {_, Format, Data}} = Error, #state{details=Details, filter=Filter}=State) ->
-    case filter(Filter, [error, Format, Data]) of
-        ok ->
-            try erollbar_parser:parse_message(error, Format, Data, Details) of
-                {ok, Item} ->
-                    State1 = maybe_send_batch(Item, State),
-                    {ok, State1}
-            catch
-                _:Reason ->
-                    info([{mod, erollbar_handler},
-                          {at, handle_event},
-                          {reason, Reason},
-                          {body, Error}])
-            end;
-        drop ->
-            {ok, State}
-    end;
+handle_event({_, _, {_, _, _}} = Report, #state{report_handlers=Handlers}=State) ->
+    State1 = case handle_message(Report, Handlers) of
+                 {ok, Item} ->
+                     State2 = maybe_send_batch(Item, State),
+                     State2;
+                 ignore ->
+                     State;
+                 {error, Reason} ->
+                     info([{mod, erollbar_handler},
+                           {at, handle_event},
+                           {reason, Reason},
+                           {body, Report}]),
+                     State
+             end,
+    {ok, State1};
 handle_event(_, State) ->
     {ok, State}.
 
@@ -148,8 +126,9 @@ send_items(#state{requests=Requests, items=Items}=State) when length(Requests) >
 send_items(#state{items=Items, requests=Requests, endpoint=Endpoint,
                   access_token=AccessToken, details=Details,
                   http_timeout=HttpTimeout}=State) ->
-    Message = erollbar_parser:encode_message(AccessToken, Items, Details),
-    case request(Endpoint, Message, HttpTimeout) of
+    Message = erollbar_encoder:encode(Items, AccessToken, Details),
+    MessageJson = jsx:encode(Message),
+    case request(Endpoint, MessageJson, HttpTimeout) of
         {ok, RequestRef} ->
             State#state{items = [], requests = [{RequestRef, length(Items)} | Requests]};
         {error, Reason} ->
@@ -161,20 +140,23 @@ send_items(#state{items=Items, requests=Requests, endpoint=Endpoint,
             State#state{items = []}
     end.
 
-filter(undefined, _) ->
-    ok;
-filter(Filter, InitialCall) ->
-    Filter(InitialCall).
-
 info(Details) ->
-    {FmtStr, FmtList} = lists:foldl(
-                          fun({K, V}, {undefined, FmtLst}) ->
-                                  {"~p=~p", FmtLst ++ [K, V]};
-                             ({K, V}, {FmtStr, FmtLst}) ->
-                                  {FmtStr ++ " ~p=~p", FmtLst ++ [K, V]}
-                          end,
-                          {undefined, []}, Details),
-    error_logger:info_msg(FmtStr, FmtList).
+    error_logger:info_report(erollbar_report, Details).
+
+handle_message(_, []) ->
+    ignore;
+handle_message(Report, [Handler|Handlers]) ->
+    try Handler(Report) of
+        {ok, Item} ->
+            {ok, Item};
+        ignore ->
+            ignore;
+        pass ->
+            handle_message(Report, Handlers)
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
 
 -spec request(binary(), binary(), integer()) -> {ok, reference()} |
                                                 {error, term()}.
