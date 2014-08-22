@@ -15,7 +15,29 @@ pass on to the next handler for parsing, `ignore` which will cause the message t
 dropped or `erollbar_message:msg()` which is a datastructure constructed with the helpers
 in the `erollbar_message` module.
 
+## Messages that will pass through the erollbar handler
+
+When the erollbar libray is started it gets registered as to `error_logger` as a event
+handler. That means all messages sent to the logger will go through erollbar. The possible
+messages are specified in the `erollbar_handlers` module, as well as below
+
+``` erlang
+-type report_details() :: [{Tag :: term(), Data :: term()} | term()] | string() | term().
+-type logger_report() :: {error_report|warning_report|info_report,
+                          pid(), {pid(), crash_report|std_error|term(), report_details()}}.
+-type logger_message() :: {error|warning_msg|info_msg,
+                           pid(), {pid(), string(), list()}}.
+-type handler() :: fun((logger_report()|logger_message()) ->
+                               {ok, erollbar_message:erollbar_msg()}|pass|ignore).
+```
+
 ## Writing a simple handler to ignore all info_reports that have the tag `ignore_me`
+
+```
+{log_type(), group_leader(), {sending_process(), log_tag()|format(), report()|args()}
+```
+
+
 
 ```
 Handler = fun ({info_report, _, {_, ignore_me, _}}) -> ignore;

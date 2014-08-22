@@ -16,8 +16,17 @@
         ,ranch_msg/1
         ]).
 
--type handler() :: fun((term()) -> {ok, erollbar_message:erollbar_msg()}|pass|ignore).
--export_type([handler/0]).
+-type report_details() :: [{Tag :: term(), Data :: term()} | term()] | string() | term().
+-type logger_report() :: {error_report|warning_report|info_report,
+                          pid(), {pid(), crash_report|std_error|term(), report_details()}}.
+-type logger_message() :: {error|warning_msg|info_msg,
+                           pid(), {pid(), string(), list()}}.
+-type handler() :: fun((logger_report()|logger_message()) ->
+                               {ok, erollbar_message:erollbar_msg()}|pass|ignore).
+-export_type([handler/0
+             ,logger_report/0
+             ,logger_message/0
+             ,report_details/0]).
 
 %% @doc Erollbar's default handlers
 -spec default_handlers() -> [handler()].
