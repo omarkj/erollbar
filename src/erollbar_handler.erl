@@ -9,7 +9,6 @@
                 time_max :: erollbar:ms()|undefined,
                 time_ref :: reference()|undefined,
                 endpoint :: binary(),
-                filter :: erollbar:filter(),
                 http_timeout :: non_neg_integer(),
                 details :: term()
                }).
@@ -35,7 +34,6 @@ init([AccessToken, Opts]) ->
                 time_max=TimeMax,
                 time_ref=TimeRef,
                 endpoint=proplists:get_value(endpoint, Opts),
-                filter=proplists:get_value(filter, Opts),
                 report_handlers=proplists:get_value(report_handlers, Opts),
                 http_timeout=proplists:get_value(http_timeout, Opts),
                 details=erollbar_encoder:create(Opts)
