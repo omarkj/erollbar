@@ -123,21 +123,21 @@ send_items(#state{requests=Requests, items=Items}=State) when length(Requests) >
           {dropped, length(Items)},
           {reason, requests_exhausted}]),
     State#state{items = []};
-send_items(#state{items=Items, requests=Requests, endpoint=Endpoint,
+send_items(#state{items=[Item|Items], requests=Requests, endpoint=Endpoint,
                   access_token=AccessToken, details=Details,
                   http_timeout=HttpTimeout}=State) ->
-    Message = erollbar_encoder:encode(Items, AccessToken, Details),
+    Message = erollbar_encoder:encode(Item, AccessToken, Details),
     MessageJson = jsx:encode(Message),
     case request(Endpoint, MessageJson, HttpTimeout) of
         {ok, RequestRef} ->
-            State#state{items = [], requests = [{RequestRef, length(Items)} | Requests]};
+            send_items(State#state{items=Items, requests=[{RequestRef, 1} | Requests]});
         {error, Reason} ->
             % Unknown error occured. Drop data and log
             info([{mod, erollbar_handler},
                   {at, send_items},
-                  {dropped, length(Items)},
+                  {dropped, 1},
                   {reason, Reason}]),
-            State#state{items = []}
+            send_items(State#state{items=Items})
     end.
 
 info(Details) ->

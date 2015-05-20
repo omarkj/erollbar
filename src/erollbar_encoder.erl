@@ -21,11 +21,11 @@ create(Opts) ->
              branch=proplists:get_value(branch, Opts),
              send_args=lists:member(send_args, Opts)}.
 
--spec encode([erollbar_message:msg()], erollbar:access_token(), encoder()) ->
+-spec encode(erollbar_message:msg(), erollbar:access_token(), encoder()) ->
                     [{binary(), term()}].
-encode(Items, AccessToken, Details) ->
+encode(Item, AccessToken, Details) ->
     [{<<"access_token">>, AccessToken},
-     {<<"data">>, [encode_item(Item, Details) || Item <- Items]}].
+     {<<"data">>, encode_item(Item, Details)}].
 
 % Internal
 encode_item(Item, Details) ->
