@@ -52,8 +52,7 @@ encode_trace(Trace, #details{send_args=SendArgs}) ->
     Exception = encode_content([{<<"class">>, Class},
                                 {<<"message">>, Message},
                                 {<<"description">>, Description}]),
-    [{<<"trace">>, [{<<"frames">>, Frames1}]},
-     {<<"exception">>, Exception}].
+    [{<<"trace">>, [{<<"frames">>, Frames1}, {<<"exception">>, Exception}]}].
 
 encode_message(Message, _Details) ->
     {_, Body} = lists:keyfind(body, 1, Message),
